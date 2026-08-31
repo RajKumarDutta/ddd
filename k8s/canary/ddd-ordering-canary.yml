@@ -1,0 +1,174 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: ddd-ordering-canary
+  namespace: ddd
+
+spec:
+
+  # Start with only ONE canary Pod.
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: ddd-ordering
+      track: canary
+
+  template:
+
+    metadata:
+      labels:
+        app: ddd-ordering
+        track: canary
+
+    spec:
+
+      terminationGracePeriodSeconds: 30
+
+      containers:
+
+        - name: ddd-ordering
+
+          # New version being tested
+          image: rdutta2/ddd-app:1.1.1
+
+          imagePullPolicy: IfNotPresent
+
+          ports:
+
+            - containerPort: 8081
+              name: http
+
+          env:
+
+            # --------------------------------------------------
+            # Spring
+            # --------------------------------------------------
+
+            - name: SPRING_PROFILES_ACTIVE
+              value: prod
+
+            # --------------------------------------------------
+            # Database
+            # --------------------------------------------------
+
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://postgres:5432/ddd_ordering
+
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: username
+
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+
+            # --------------------------------------------------
+            # Server
+            # --------------------------------------------------
+
+            - name: SERVER_PORT
+              value: "8081"
+
+            # --------------------------------------------------
+            # OpenTelemetry
+            # --------------------------------------------------
+
+            - name: OTEL_SERVICE_NAME
+              value: ddd
+
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://otel-collector:4318
+
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: http/protobuf
+
+            - name: OTEL_TRACES_ENDPOINT
+              value: http://otel-collector:4318/v1/traces
+
+            - name: OTEL_METRICS_ENDPOINT
+              value: http://otel-collector:4318/v1/metrics
+
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: deployment.environment=kubernetes,service.version=2.0.0,release.track=canary
+
+            # --------------------------------------------------
+            # HikariCP
+            # --------------------------------------------------
+
+            - name: DB_POOL_MAX_SIZE
+              value: "20"
+
+            - name: DB_POOL_MIN_IDLE
+              value: "5"
+
+            - name: DB_CONNECTION_TIMEOUT
+              value: "30000"
+
+            - name: DB_IDLE_TIMEOUT
+              value: "600000"
+
+            - name: DB_MAX_LIFETIME
+              value: "1800000"
+
+          # ==================================================
+          # STARTUP PROBE
+          # ==================================================
+
+          startupProbe:
+
+            httpGet:
+              path: /actuator/health
+              port: 8081
+
+            failureThreshold: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+
+          # ==================================================
+          # READINESS PROBE
+          # ==================================================
+
+          readinessProbe:
+
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8081
+
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+            successThreshold: 1
+
+          # ==================================================
+          # LIVENESS PROBE
+          # ==================================================
+
+          livenessProbe:
+
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8081
+
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+
+          # ==================================================
+          # RESOURCES
+          # ==================================================
+
+          resources:
+
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+
+            limits:
+              cpu: "1"
+              memory: "1Gi"

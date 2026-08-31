@@ -1,0 +1,39 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+
+metadata:
+  name: ddd-ordering
+  namespace: ddd
+
+  annotations:
+    nginx.ingress.kubernetes.io/canary: "true"
+    nginx.ingress.kubernetes.io/canary-by-header: "X-Canary"
+    nginx.ingress.kubernetes.io/canary-by-header-value: "true"
+
+spec:
+  ingressClassName: nginx
+
+  rules:
+    - host: ddd.local
+
+      http:
+        paths:
+
+          # Stable
+          - path: /api/v1/orders
+            pathType: Prefix
+            backend:
+              service:
+                name: ddd-ordering-stable
+                port:
+                  number: 8081
+
+                    # Canary
+          - path: /api/v1/orders
+            pathType: Prefix
+
+            backend:
+              service:
+                name: ddd-ordering-canary
+                port:
+                  number: 8081

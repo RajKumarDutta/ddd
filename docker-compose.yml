@@ -1,0 +1,124 @@
+services:
+
+  # ============================================================
+  # POSTGRESQL
+  # ============================================================
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: ddd-postgres
+
+    environment:
+      POSTGRES_DB: ddd_ordering
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U postgres -d ddd_ordering"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+
+  # ============================================================
+  # JAEGER
+  # ============================================================
+
+  jaeger:
+    image: jaegertracing/jaeger:2.20.0
+    container_name: ddd-jaeger
+
+    ports:
+      - "16686:16686"
+
+
+  # ============================================================
+  # OPENTELEMETRY COLLECTOR
+  # ============================================================
+
+  otel-collector:
+    image: otel/opentelemetry-collector:0.159.0
+    container_name: ddd-otel-collector
+
+    command:
+      - "--config=/etc/otelcol/config.yaml"
+
+    volumes:
+      - ./otel/otel-collector-config.yml:/etc/otelcol/config.yaml:ro
+
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+
+    depends_on:
+      jaeger:
+        condition: service_started
+
+
+  # ============================================================
+  # SPRING BOOT APPLICATION
+  # ============================================================
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    container_name: ddd-app
+
+    environment:
+
+      SPRING_PROFILES_ACTIVE: prod
+
+      # Database
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/ddd_ordering
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+
+      # Server
+      SERVER_PORT: 8081
+
+      # OpenTelemetry Java Agent
+      OTEL_SERVICE_NAME: ddd
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+
+      # Spring Boot / Micrometer
+      OTEL_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
+      OTEL_METRICS_ENDPOINT: http://otel-collector:4318/v1/metrics
+
+      # HikariCP
+      DB_POOL_MAX_SIZE: 20
+      DB_POOL_MIN_IDLE: 5
+      DB_CONNECTION_TIMEOUT: 30000
+      DB_IDLE_TIMEOUT: 600000
+      DB_MAX_LIFETIME: 1800000
+
+    ports:
+      - "8081:8081"
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+      otel-collector:
+        condition: service_started
+
+
+# ==============================================================
+# VOLUMES
+# ==============================================================
+
+volumes:
+  postgres_data:

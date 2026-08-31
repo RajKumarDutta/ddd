@@ -1,0 +1,23 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+
+metadata:
+  name: ddd-ordering
+  namespace: ddd
+
+spec:
+  ingressClassName: nginx
+
+  rules:
+    - host: ddd.local
+
+      http:
+        paths:
+          - path: /api/v1/orders
+            pathType: Prefix
+
+            backend:
+              service:
+                name: ddd-ordering-stable
+                port:
+                  number: 8081

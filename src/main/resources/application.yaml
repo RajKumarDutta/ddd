@@ -1,0 +1,72 @@
+spring:
+  application:
+    name: ddd
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ddd_ordering
+    username: postgres
+    password: postgres
+
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      pool-name: DomainDrivenDesign_HikariCP
+      transaction-isolation: TRANSACTION_READ_COMMITTED
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+
+server:
+  port: 8081
+
+
+management:
+
+  otlp:
+    metrics:
+      export:
+        url: http://localhost:4318/v1/metrics
+
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: http://localhost:4318/v1/traces
+          transport: http
+
+  endpoints:
+    web:
+      base-path: /actuator
+      exposure:
+        include:
+          - health
+          - info
+          - metrics
+          - prometheus
+
+  endpoint:
+
+    health:
+      show-details: when-authorized
+
+      probes:
+        enabled: true
+
+      livenessstate:
+        enabled: true
+
+      readinessstate:
+        enabled: true
+
+  server:
+    port: 8081
